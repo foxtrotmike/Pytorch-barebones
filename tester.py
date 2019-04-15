@@ -2,7 +2,7 @@
 Author: Fayyaz Minhas, DCIS, PIEAS, PO Nilore, Islamabad, Pakistan
 Email/web: http://faculty.pieas.edu.pk/fayyaz/
 
-A barebones linear regression example with pytorch
+A barebones linear model example with pytorch
 Demonstrates: Representation, Evaluation and Optimization
 as well as the concept of loss functions and automatic differentiation
 """
@@ -10,20 +10,25 @@ import numpy as np
 import matplotlib.pyplot as plt
 import torch
 import torch.nn.modules as nn
+
+
 #Let's generate some data
-inputs = np.array([[0,0],[0,1],[1,0],[1,1]])
-targets = np.array([1,2,2,3])
+inputs = 2*np.array([[0,0],[0,1],[1,0],[1,1]])-1
+targets = np.array([1,-1,-1,-1])
 device = torch.device('cpu')
 # device = torch.device('cuda') # Uncomment this to run on GPU
 x = torch.from_numpy(inputs).float()
 y = torch.from_numpy(targets).float()
 N, D_in,D_out = x.shape[0], x.shape[1], 1
+def hinge(y_true, y_pred):
+    zero = torch.Tensor([0]) 
+    return torch.mean(torch.max(zero, 1 - y_true * y_pred))
 
 # Create random Tensors for weights; setting requires_grad=True means that we
 # want to compute gradients for these Tensors during the backward pass.
-w = torch.randn(D_in+1, D_out, device=device, requires_grad=True)
+wb = torch.randn(D_in+1, D_out, device=device, requires_grad=True)
 #Note: we have added one additional weight (for bias)
-lossf = nn.loss.MSELoss()#nn.loss.L1Loss()
+#lossf = nn.MSELoss()#nn.L1Loss()
 learning_rate = 1e-1
 L = [] #history of losses
 for t in range(100):
@@ -34,16 +39,18 @@ for t in range(100):
   """
   # REPRESENTATION
   """
-  y_pred = x.mm(w[1:]).flatten()+w[0] #Implementing w'x+b
+  w = wb[1:]
+  b = wb[0]
+  y_pred = x.mm(w).flatten()+b #Implementing w'x+b
 
   """
   # EVALUATION
   """
   # Compute and print loss. Loss is a Tensor of shape (), and loss.item()
   # is a Python number giving its value.
-  #loss = (y_pred - y).pow(2).mean() 
-  loss = lossf(y_pred,y)
-  obj = loss+0.0*w[1:].norm() #empirical loss + regularization
+  #loss = (y_pred - y).pow(2).mean() #loss = lossf(y_pred,y)
+  loss = hinge(y,y_pred)  
+  obj = loss+0.25*torch.transpose(w,1,0).mm(w) #empirical loss + regularization
   L.append((loss.item(),obj.item())) #save for history
   """
   #OPTIMIZATION
@@ -59,10 +66,20 @@ for t in range(100):
   # graph for the update steps, so we use the torch.no_grad() context manager
   # to prevent PyTorch from building a computational graph for the updates
   with torch.no_grad():
-    w -= learning_rate * w.grad
+    wb -= learning_rate * wb.grad
     # Manually zero the gradients after running the backward pass
-    w.grad.zero_()
+    wb.grad.zero_()
 
+
+wbn = wb.detach().numpy()
+plt.close("all")
 plt.plot(L)
-plt.grid(); plt.xlabel('Epochs'); plt.ylabel('loss,obj')
+plt.grid(); plt.xlabel('Epochs'); plt.ylabel('value');plt.legend(['Loss','Objective'])
 print("Predictions: ",y_pred)
+print("Weights: ",wbn)
+plt.figure()
+def clf(inputs): 
+  return inputs@wbn[1:]+wbn[0]
+
+from plotit import plotit
+plotit(inputs,targets,clf=clf, conts=[-1,0,1])
